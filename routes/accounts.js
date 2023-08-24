@@ -1,7 +1,10 @@
 var express = require('express');
 var router = express.Router();
+
 let Account = require(`../models/account.model`);
 let Authkey = require(`../models/authkey.model`);
+let User = require(`../models/user.model`);
+
 var bycrypt = require('bcrypt');
 var crypto = require('crypto')
 
@@ -41,29 +44,33 @@ router.route('/register').post((req,res)=>{
                 res.json("Email already in use");
                 return;
             }
-            bycrypt.hash(password, 10).then((hashedPassword)=>{
-                const newAccount = new Account ({firstName, lastName, email, passwordHash:hashedPassword,accountType:1});
-                newAccount.save()
-                .then((savedAccount) => {
-                    if(savedAccount == undefined){
-                        res.status(400);
-                        res.json("Save Error");
-                        return;
-                    }
-                    crypto.randomBytes(48, function (err, buffer) {
-                        if (err) { res.status(400); res.send([{ 'error': err }]); return }
-                        var k = buffer.toString('hex');
-                        const newAuthkey = new Authkey({key:k,accountId:savedAccount._id, accountType:savedAccount.accountType});
-                        newAuthkey.save()
-                        .then((key) => res.json(key))
-                        .catch(err => res.status(400).json('Error: ' + err))
+            const newUser = new User({savedDocuments:[], viewedDocuments:[], userLevel: 0});
+            newUser.save()
+            .then((savedUser)=>{
+                bycrypt.hash(password, 10).then((hashedPassword)=>{
+                    const newAccount = new Account ({firstName, lastName, email, passwordHash:hashedPassword,accountType:1, userId: savedUser._id});
+                    newAccount.save()
+                    .then((savedAccount) => {
+                        if(savedAccount == undefined){
+                            res.status(400);
+                            res.json("Save Error");
+                            return;
+                        }
+                        crypto.randomBytes(48, function (err, buffer) {
+                            if (err) { res.status(400); res.send([{ 'error': err }]); return }
+                            var k = buffer.toString('hex');
+                            const newAuthkey = new Authkey({key:k,accountId:savedAccount._id,userId: savedAccount._id, accountType:savedAccount.accountType});
+                            newAuthkey.save()
+                            .then((key) => res.json(key))
+                            .catch(err => res.status(400).json('Error: ' + err))
+                        })
                     })
                 })
-            })
-            
+            }) 
         }
     )
 })
+
 router.route('/login').post((req,res)=>{
     const email = req.body.email;
     const password = req.body.password;
